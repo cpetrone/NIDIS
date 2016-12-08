@@ -1,6 +1,6 @@
 # Non-Isothermal Diffusion Incremental Step (NIDIS)
 
-These MATLAB codes were developed to apply a Non-Isothermal Diffusion Incremental Step model to reconstruct crystal lifetime histories helping to constrain pre-eruptive magmatic processes. The model is explained in the paper freely accessible at http://www.nature.com/articles/ncomms12946 published on Nature Communications on the 5th October 2016
+These MATLAB codes were developed to apply a Non-Isothermal Diffusion Incremental Step model to reconstruct crystal lifetime histories helping to constrain pre-eruptive magmatic processes. The model is explained in the paper freely accessible at http://www.nature.com/articles/ncomms12946 published on Nature Communications on the 5th October 2016.
 
 
 1) greyvalues.m is used to extract greyvalues from images.
