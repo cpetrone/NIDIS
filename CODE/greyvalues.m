@@ -463,7 +463,8 @@ while true % Allows to perform multiple calculations without running the code ag
     profile_points = repmat(double(prof_int_num_temp),[fp,1]);
     
     % Perform calculations over grey values 
-    mean_val = mean(profile_all,2);  
+    mean_val = mean(profile_all,2); 
+    mean_all_plot = mean_val; % Store mean values for later plotting
     min_val = min(profile_all,[],2);
     max_val = max(profile_all,[],2);
     std_dev = std(profile_all,0,2); 
@@ -500,7 +501,8 @@ while true % Allows to perform multiple calculations without running the code ag
         used_points(i) = prof_int_num_temp - nan_count;
         nan_count = 0;
     end
-    mean_val = nanmean(profile_all_calc,2);  
+    mean_val = nanmean(profile_all_calc,2); 
+    mean_clean_plot = mean_val; % Store mean values for later plotting
     min_val = nanmin(profile_all_calc,[],2);
     max_val = nanmax(profile_all_calc,[],2);
     std_dev = nanstd(profile_all_calc,0,2); 
@@ -551,7 +553,7 @@ while true % Allows to perform multiple calculations without running the code ag
     dlmwrite(name2, data_all, '-append','delimiter',',');
     
     % Create an image with all the profile lines
-    name_fig = strcat(name(1:end-4),'.jpg');
+    name_fig = strcat(name(1:end-4),'_lines.jpg');
     h = gcf;
     print (h, '-djpeg', name_fig);
     
@@ -617,13 +619,70 @@ while true % Allows to perform multiple calculations without running the code ag
         dlmwrite(name, data_all_start, '-append','delimiter',',');
         dlmwrite(name2, data_all, '-append','delimiter',',');
         
-        % Delete old files and move new files to the directory
+        % Plot real distance VS greyvalues
+        
+        % Set up figure to receive data sets and fits
+        graph = clf;
+        img = figure(graph);
+        set(graph,'Units','Pixels','Position',[549 276 688 485]);
+        % Line handles and text for the legend.
+        legh = [];
+        legt = {};
+        % Limits of the x-axis.
+        xlim = [Inf -Inf];
+        % Axes for the plot.
+        ax = axes;
+        set(ax,'Units','normalized','OuterPosition',[0 0 1 1]);
+        set(ax,'Box','on');
+        axes(ax);
+        hold on;
+
+        %  data "Grey Values vs. Distance(um)"
+        xdata = dist_real(:);
+        ydata = mean_all_plot(:);
+        graph_data = line(xdata,ydata,'Parent',ax,'Color',[0 0 1],...
+            'linestyle', 'none',...
+            'Marker','.', 'MarkerSize',10);
+        legh(end+1) = graph_data;
+        legt{end+1} = 'Means from all greyvalues';        
+        ydata = mean_clean_plot(:);
+        graph_data_1 = line(xdata,ydata,'Parent',ax,'Color',[1 0 0],...
+            'linestyle', 'none',...
+            'Marker','.', 'MarkerSize',10);        
+        legh(end+1) = graph_data_1;
+        legt{end+1} = 'Means from cleared greyvalues';
+        xlim(1) = min(xlim(1),min(xdata));
+        xlim(2) = max(xlim(2),max(xdata));
+        
+        % Nudge axis limits beyond data limits
+        if all(isfinite(xlim))
+            xlim = xlim + [-1 1] * 0.01 * diff(xlim);
+            set(ax,'XLim',xlim)
+        else
+            set(ax, 'XLim',[-1, 101]);
+        end
+
+        % Finish plotting data. 
+        hold off;
+        % Display legend
+        leginfo = {'Orientation', 'vertical', 'Location', 'NorthEast'};
+        fit_graph = legend(ax,legh,legt,leginfo{:});
+        set(fit_graph,'Interpreter','none');
+        % Label x- and y-axes.
+        xlabel(ax,'\mum');
+        ylabel(ax,'Greyvalues [0-255]');
+        
+        % Delete old files, move new files to the directory and export
+        % graph with greyvalues as image
         filepath = strcat(directory_path, name);
         delete(filepath);
         filepath = strcat(directory_path, name2);
         delete(filepath);
         movefile(name, directory_path);
         movefile(name2, directory_path);
+        img_name = strcat(name(1:end-4),'_graph.jpg');
+        img_name_full = strcat(directory_path, img_name);
+        print(img, img_name_full, '-dpng');
         choice = menu('What Next?','Calculate Real World Distance','Calculate more grey values', 'Exit The Program');
     end
     

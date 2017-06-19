@@ -4,8 +4,9 @@
 
 % Residence time is calculated using given temperature, diffusion coefficient and
 % pressure. These values depend on the mineral. Default values are for pyroxene 
-% crystals. The error on residence time is calculated using different
-% methods (e.g.: error propagation, normal and uniform distribution).
+% crystals. The error on residence time is calculated using the rules of
+% propagation of errors.
+
 
 % N.B.: to be used with finite sources profiles (i.e.: gaussian shape
 % profiles). It hence REQUIRES the input of a previously found parameter. 
@@ -71,11 +72,11 @@ y0_start = ydata(1);
 h_start = 5;
 erf_param_start_msg = 'Enter initial condition (y0 previously modelled): ';
 y0_old = input(erf_param_start_msg);
-erf_par = abs(y0_old - ydata(1)) / 2; % Fixed value based on WRONG 'y0_start' estimate.
+erf_par = abs(y0_old - ydata(1)); % Fixed value based on WRONG 'y0_start' estimate.
 Dt_start = 6;
 
 % Set up fittype and options to get the fit value of y0, used to recalculate 'erf_par' 
-equation_ERFC = sprintf('y0+(%d*(erfc((h-(x-x0))/Dt) + erfc((h+(x-x0))/Dt)))',erf_par);
+equation_ERFC = sprintf('y0-(%d*(erf((h-(x-x0))/Dt) + erf((h+(x-x0))/Dt)))',erf_par);
 equation_ERF = sprintf('y0+(%d*(erf((h-(x-x0))/Dt) + erf((h+(x-x0))/Dt)))',erf_par);
 if ydata(middle_index) < ydata(1) % ERFC 
     ft = fittype(equation_ERFC,...
@@ -91,17 +92,17 @@ opts.Weights = weights;
 opts.DiffMaxChange = 0.01;
 opts.Display = 'Off';
 opts.MaxFunEvals = 1000000000;
-opts.MaxIter = 1000000000;
+opts.MaxIter = 1000000000000;
 opts.StartPoint = [y0_start h_start x0_start Dt_start];
 opts.Upper = [Inf Inf Inf Inf];
 opts.Lower = [-Inf -Inf -Inf -Inf];
 % Fit model to data.
 [fitresult, gof] = fit( xdata, ydata, ft, opts );
 param_values = coeffvalues(fitresult);
-erf_par = abs(y0_old - param_values(1)) / 2; % Fixed value based on RIGHT 'y0' value found by fit function 
+erf_par = abs(y0_old - param_values(1))/2; % Fixed value based on RIGHT 'y0' value found by fit function 
 
 % Re compute fitting using correct 'erf_par' 
-equation_ERFC = sprintf('y0+(%d*(erfc((h-(x-x0))/Dt) + erfc((h+(x-x0))/Dt)))',erf_par);
+equation_ERFC = sprintf('y0-(%d*(erf((h-(x-x0))/Dt) + erf((h+(x-x0))/Dt)))',erf_par);
 equation_ERF = sprintf('y0+(%d*(erf((h-(x-x0))/Dt) + erf((h+(x-x0))/Dt)))',erf_par);
 if ydata(middle_index) < ydata(1) % ERFC 
     ft = fittype(equation_ERFC,...
@@ -190,7 +191,7 @@ conf_int = confint(fitresult);
 param_names = coeffnames(fitresult);
 param_values = coeffvalues(fitresult);
 if ydata(middle_index) < ydata(1) % ERFC 
-    yfit = param_values(1)+(erf_par*(erfc((param_values(2)-(xdata-param_values(3)))/param_values(4)) + erfc((param_values(2)+(xdata-param_values(3)))/param_values(4))));
+    yfit = param_values(1)-(erf_par*(erf((param_values(2)-(xdata-param_values(3)))/param_values(4)) + erf((param_values(2)+(xdata-param_values(3)))/param_values(4))));
 elseif ydata(middle_index) > ydata(1) % ERF 
     yfit = param_values(1)+(erf_par*(erf((param_values(2)-(xdata-param_values(3)))/param_values(4)) + erf((param_values(2)+(xdata-param_values(3)))/param_values(4))));
 end
@@ -246,24 +247,30 @@ elseif answer == 'y'
     Dt = cell2mat(Dt_data(2))*0.000001;
     Dt_err = cell2mat(Dt_data(3))*0.000001;
     R =  8.31451/1000;
+    Dt_temp_const_err = 0;
     
-    % Maximum error
+    % Calculate residence time
     D = D0*exp(-DH./(R*t_k));
-    D_max = D0*exp(-DH./(R*(t_k-DeltaT)));
-    D_err = (D - D_max) / D;
     res_time_s = (Dt/2)^2*(1./D);
-    res_time_s_max = (Dt_err(2)/2)^2*(1/D_max);
     res_time_y = res_time_s/(60*60*24*365.25);
-    res_time_max_y = res_time_s_max/(60*60*24*365.25);
-    difference_max = (res_time_max_y - res_time_y)/res_time_y;
-
+    
     % Use error propagation
     DDt = 2*(Dt_err(2)-Dt)/Dt;
     DD = DH/R * ((DeltaT/t_k)*1/t_k);
     t_err = (DDt^2+ DD^2)^0.5; % In percentage
+    t_err_abs = res_time_y * t_err; % In years
+    abs_error_Dt = res_time_y * DD; % In years
+    time_temp_const = res_time_y * DDt; % In years
+    
+    %{
+    % Maximum error
+    D_max = D0*exp(-DH./(R*(t_k-DeltaT)));
+    D_err = (D - D_max) / D;
+    res_time_s_max = (Dt_err(2)/2)^2*(1/D_max);
+    res_time_max_y = res_time_s_max/(60*60*24*365.25);
+    difference_max = (res_time_max_y - res_time_y)/res_time_y;
     
     % Errors on Dt and temperature are uniformly distributed
-    ran_val = 1000000;
     numbers_dt = (Dt_err(2)-Dt_err(1)).*rand(ran_val,1) + Dt_err(1);
     numbers = ((t_k+DeltaT)-(t_k-DeltaT)).*rand(ran_val,1) + (t_k-DeltaT);
     D_val = D0*exp(-DH./(R*numbers));
@@ -274,7 +281,6 @@ elseif answer == 'y'
     diff_val = std(res_time_y_val)/mean(res_time_y_val);
     
     % Errors on Dt and temperature are normally distributed
-    nor_dt = Dt + ((Dt_err(2)-Dt).*randn(ran_val,1));
     nor_t = t_k + 10.*randn(ran_val,1);
     D_nor = D0*exp(-DH./(R*nor_t));
     D_nor_err = std(D_nor)/mean(D_nor);
@@ -291,36 +297,41 @@ elseif answer == 'y'
     res_time_mix = mean(res_time_y_mix);
     diff_mix = std(res_time_y_mix)/mean(res_time_y_mix);
     
-    % The temperature is constant. Error on Dt is normally distributed
+    % Temperature is constant. Error on Dt is normally distributed
+    ran_val = 1000000;
+    nor_dt = Dt + ((Dt_err(2)-Dt).*randn(ran_val,1));
     D_const = D0*exp(-DH./(R*t_k));
-    D_const_err = 0;
     res_time_s_const = nor_dt.^2./(4*D_const);
     res_time_y_const = res_time_s_const./(60*60*24*365.25);
     res_time_const = mean(res_time_y_const);
     diff_const = std(res_time_y_const)/mean(res_time_y_const);
+    %}
     
-    % Export data on residence time and errors as variables to a workspace in the dedicated folder  
+    % Export data on residence time and errors as variables to the workspace
     blank = cellstr('----');
     temp_text = cellstr('Temperature_(°C)');
     res_time_text = cellstr('Residence_time_(y)');
-    abs_error_text = cellstr('relative_error_on_residence_time(%)');
-    rel_error_text = cellstr('relative_error_on_Dt_parameter(%)');
-    key = vertcat(blank,temp_text,res_time_text,abs_error_text,rel_error_text);
-    res_time_max_error_s = cellstr('res_time_max_error');
-    res_time_max_error = vertcat(res_time_max_error_s,t_c,res_time_y,difference_max, D_err);
+    time_error_text = cellstr('Relative_error_on_residence_time(%)');
+    time_absolute_error_text = cellstr('Absolute_error_on_residence_time(yr)');
+    Dt_error_text = cellstr('Relative_error_on_Dt_parameter(%)');
+    Dt_abs_error_text = cellstr('Absolute_error_on_Dt_parameter(yr)');
+    key = vertcat(blank,temp_text,res_time_text,time_error_text,time_absolute_error_text,Dt_error_text,Dt_abs_error_text);
+    % res_time_max_error_s = cellstr('res_time_max_error');
+    % res_time_max_error = vertcat(res_time_max_error_s,t_c,res_time_y,difference_max, D_err);
     res_time_error_prop_s = cellstr('res_time_error_prop');
-    res_time_error_prop = vertcat(res_time_error_prop_s,t_c,res_time_y,t_err,DD);
-    res_time_uniform_dist_s = cellstr('res_time_uniform_dist');
-    res_time_uniform_dist = vertcat(res_time_uniform_dist_s,t_c,res_time_val,diff_val, D_val_err);
-    res_time_normal_dist_s = cellstr('res_time_normal_dist');
-    res_time_normal_dist = vertcat(res_time_normal_dist_s,t_c,res_time_nor,diff_nor, D_nor_err);
-    res_time_temp_uniform_Dt_normal_s = cellstr('res_time_temp_uniform_Dt_normal');
-    res_time_temp_uniform_Dt_normal = vertcat(res_time_temp_uniform_Dt_normal_s,t_c,res_time_mix,diff_mix, D_mix_err);
+    res_time_error_prop = vertcat(res_time_error_prop_s,t_c,res_time_y,t_err,t_err_abs,DD,abs_error_Dt);
+    % res_time_uniform_dist_s = cellstr('res_time_uniform_dist');
+    % res_time_uniform_dist = vertcat(res_time_uniform_dist_s,t_c,res_time_val,diff_val, D_val_err);
+    % res_time_normal_dist_s = cellstr('res_time_normal_dist');
+    % res_time_normal_dist = vertcat(res_time_normal_dist_s,t_c,res_time_nor,diff_nor, D_nor_err);
+    % res_time_temp_uniform_Dt_normal_s = cellstr('res_time_temp_uniform_Dt_normal');
+    % res_time_temp_uniform_Dt_normal = vertcat(res_time_temp_uniform_Dt_normal_s,t_c,res_time_mix,diff_mix, D_mix_err);
     res_time_temp_const_s = cellstr('res_time_temp_const');
-    res_time_temp_const = vertcat(res_time_temp_const_s,t_c,res_time_y,DDt, D_const_err);
-    res_time_temp_const_Dt_normal_s = cellstr('res_time_temp_const_Dt_normal');
-    res_time_temp_const_Dt_normal = vertcat(res_time_temp_const_Dt_normal_s,t_c,res_time_const,diff_const, D_const_err);
-    res_time_all = horzcat(key,res_time_max_error,res_time_error_prop,res_time_uniform_dist,res_time_normal_dist,res_time_temp_uniform_Dt_normal,res_time_temp_const,res_time_temp_const_Dt_normal);
+    res_time_temp_const = vertcat(res_time_temp_const_s,t_c,res_time_y,DDt, time_temp_const,Dt_temp_const_err,Dt_temp_const_err);
+    % res_time_temp_const_Dt_normal_s = cellstr('res_time_temp_const_Dt_normal');
+    % res_time_temp_const_Dt_normal = vertcat(res_time_temp_const_Dt_normal_s,t_c,res_time_const,diff_const, D_const_err);
+    % res_time_all = horzcat(key, res_time_max_error,res_time_error_prop,res_time_uniform_dist,res_time_normal_dist,res_time_temp_uniform_Dt_normal,res_time_temp_const,res_time_temp_const_Dt_normal);
+    res_time_all = horzcat(key, res_time_error_prop,res_time_temp_const);
     res_time_all_name = sprintf('res_time_all_%d.mat', dir_number);
     res_time_all_full_name = strcat('./',directory_name, '/', res_time_all_name);
     
@@ -333,7 +344,7 @@ elseif answer == 'y'
     DT_s = cellstr('DeltaT');
     DT_data = vertcat(DT_s,DeltaT);
     data_input_all = horzcat(D0_data,DH_data,T_data,DT_data);
-
+    
     save(res_time_all_full_name, 'res_time_all', 'data_input_all');
 end    
 
@@ -364,20 +375,23 @@ elseif yfit_inserted_Dt_msg_answer == 'y'
     DDt = 2*(Dt_err(2)-Dt)/Dt;
     DD = DH/R * ((DeltaT/t_k)*1/t_k);
     t_err = (DDt^2+ DD^2)^0.5; % In percentage
-   
+    t_err_abs = res_time_y * t_err; % In years
+    abs_error_Dt = res_time_y * DD; % In years
+    time_temp_const = res_time_y * DDt; % In years
+
     % Export time data
-    time_error_prop_s = cellstr('time_error_prop');
-    time_error_prop = vertcat(time_error_prop_s,t_c,res_time_y,t_err, DD);
-    time_tem_const_s = cellstr('time_tem_const');
-    time_tem_const = vertcat(time_tem_const_s,t_c,res_time_y,DDt, D_const_err);
-    data_time_all = horzcat(key,time_error_prop,time_tem_const);
+    res_time_error_prop_s = cellstr('res_time_error_prop');
+    res_time_error_prop = vertcat(res_time_error_prop_s,t_c,res_time_y,t_err,t_err_abs, DD,abs_error_Dt);
+    res_time_temp_const_s = cellstr('res_time_temp_const');
+    res_time_temp_const = vertcat(res_time_temp_const_s,t_c,res_time_y,DDt,time_temp_const,Dt_temp_const_err,Dt_temp_const_err);
+    data_time_all = horzcat(key,res_time_error_prop,res_time_temp_const);
    
     % Export new Dt parameters 
     Dt_inserted_Dt = cell2mat(Dt_data(2));
     param_values_inserted_Dt = param_values;
     param_values_inserted_Dt(4) = Dt_inserted_Dt;
     if ydata(middle_index) < ydata(1) % ERFC 
-        yfit_inserted_Dt = param_values_inserted_Dt(1)+(erf_par*(erfc((param_values_inserted_Dt(2)-(xdata-param_values_inserted_Dt(3)))/param_values_inserted_Dt(4)) + erfc((param_values_inserted_Dt(2)+(xdata-param_values_inserted_Dt(3)))/param_values_inserted_Dt(4))));
+        yfit_inserted_Dt = param_values_inserted_Dt(1)-(erf_par*(erf((param_values_inserted_Dt(2)-(xdata-param_values_inserted_Dt(3)))/param_values_inserted_Dt(4)) + erf((param_values_inserted_Dt(2)+(xdata-param_values_inserted_Dt(3)))/param_values_inserted_Dt(4))));
     elseif ydata(middle_index) > ydata(1) % ERF 
         yfit_inserted_Dt = param_values_inserted_Dt(1)+(erf_par*(erf((param_values_inserted_Dt(2)-(xdata-param_values_inserted_Dt(3)))/param_values_inserted_Dt(4)) + erf((param_values_inserted_Dt(2)+(xdata-param_values_inserted_Dt(3)))/param_values_inserted_Dt(4))));
     end
